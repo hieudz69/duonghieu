@@ -2,6 +2,7 @@ package com.example.springsecurity.controller;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -22,6 +23,8 @@ import com.example.springsecurity.security.jwt.JwtUtils;
 import jakarta.validation.Valid;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -124,8 +127,50 @@ public class AuthController {
 
     @GetMapping("/content")
     @PreAuthorize("hasRole('USER') or hasRole('MODERATOR') or hasRole('ADMIN')")
-    public List<Content> getAllUser() {
-        return contentRepository.findAll();
+    public Page<Content> getAllUser(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        // Tạo đối tượng PageRequest để đại diện cho cấu hình phân trang
+        PageRequest pageRequest = PageRequest.of(page, size);
+
+        // Gọi phương thức findAll trên contentRepository với PageRequest đã được chỉ định
+        return contentRepository.findAll(pageRequest);
+    }
+
+    @GetMapping("/search")
+    @PreAuthorize("hasRole('USER') or hasRole('MODERATOR') or hasRole('ADMIN')")
+    public ResponseEntity<?> getContentByUserOrTitle(@RequestParam(required = false) String username,
+                                                     @RequestParam(required = false) String title) {
+        try {
+            if (username != null && !username.isEmpty()) {
+                Optional<Content> existingContentByUsernameOptional = contentRepository.findByUsername(username);
+
+                if (existingContentByUsernameOptional.isPresent()) {
+                    Content existingContent = existingContentByUsernameOptional.get();
+                    return ResponseEntity.ok(existingContent);
+                } else {
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                            .body(new MessageResponse("Không tìm thấy nội dung với tên người dùng: " + username));
+                }
+            } else if (title != null && !title.isEmpty()) {
+                Optional<Content> existingContentByTitleOptional = contentRepository.findByTitle(title);
+
+                if (existingContentByTitleOptional.isPresent()) {
+                    Content existingContent = existingContentByTitleOptional.get();
+                    return ResponseEntity.ok(existingContent);
+                } else {
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                            .body(new MessageResponse("Không tìm thấy nội dung với tiêu đề: " + title));
+                }
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new MessageResponse("Vui lòng cung cấp thông tin."));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new MessageResponse("Đã xảy ra lỗi khi truy vấn nội dung."));
+        }
     }
 
 
